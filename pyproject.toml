@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "soccerdata"
-version = "1.5.1"
+version = "1.5.2"
 description = "A collection of wrappers over soccer data from various websites / APIs."
 authors = ["Pieter Robberechts <pieter.robberechts@kuleuven.be>"]
 license = "Apache-2.0"
@@ -15,8 +15,8 @@ classifiers = [
 ]
 
 [tool.poetry.dependencies]
-python = ">=3.8.1,<4.0.0"
-pandas = "^2.0.0"
+python = ">=3.9,<3.13"
+pandas = "^2.0.0, !=2.1.0"
 requests = "^2.23"
 unicode = "^2.7"
 lxml = "^4.6"

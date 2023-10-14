@@ -384,6 +384,9 @@ class FBref(BaseRequestsReader):
         if stat_type not in team_stats:
             raise ValueError(f"Invalid argument: stat_type should be in {team_stats}")
 
+        if stat_type == "schedule" and opponent_stats:
+            raise ValueError("Opponent stats are not available for the 'schedule' stat type")
+
         if stat_type == "goal_shot_creation":
             stat_type = "gca"
 
@@ -454,7 +457,9 @@ class FBref(BaseRequestsReader):
             df_table = _parse_table(html_table)
             df_table["season"] = skey
             df_table["team"] = team
-            df_table["Time"] = html_table.xpath(".//td[@data-stat='start_time']/@csk")
+            df_table["Time"] = [
+                x.get('csk', None) for x in html_table.xpath(".//td[@data-stat='start_time']")
+            ]
             df_table["Match Report"] = [
                 mlink.xpath("./a/@href")[0]
                 if mlink.xpath("./a") and mlink.xpath("./a")[0].text == "Match Report"
@@ -970,7 +975,6 @@ class FBref(BaseRequestsReader):
                     minute = e.xpath("./div[1]")[0].text.replace("&rsquor;", "").strip()
                     score = e.xpath("./div[1]/small/span")[0].text
                     player1 = e.xpath("./div[2]/div[2]/div/a")[0].text
-                    print(minute, score, player1)
                     if e.xpath("./div[2]/div[2]/small/a"):
                         player2 = e.xpath("./div[2]/div[2]/small/a")[0].text
                     else:
