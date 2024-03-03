@@ -7,7 +7,7 @@ author = "Pieter Robberechts"
 copyright = f"2021, {author}"
 
 # The full version, including alpha/beta/rc tags
-release = '1.5.2'
+release = '1.6.0'
 
 # -- General configuration ------------------------------------------------
 
@@ -54,6 +54,7 @@ nbsphinx_thumbnails = {
     'examples/datasources/FiveThirtyEight': '_static/FiveThirtyEight-logo.png',
     'examples/datasources/MatchHistory': '_static/FootballData-logo.jpg',
     'examples/datasources/SoFIFA': '_static/SoFIFA-logo.png',
+    'examples/datasources/Understat': '_static/Understat-logo.png',
 }
 
 # This is processed by Jinja2 and inserted before each notebook

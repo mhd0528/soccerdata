@@ -12,6 +12,9 @@ from rich.logging import RichHandler
 # Configuration
 NOCACHE = os.environ.get("SOCCERDATA_NOCACHE", 'False').lower() in ('true', '1', 't')
 NOSTORE = os.environ.get("SOCCERDATA_NOSTORE", 'False').lower() in ('true', '1', 't')
+MAXAGE = None
+if os.environ.get("SOCCERDATA_MAXAGE") is not None:
+    MAXAGE = int(os.environ.get("SOCCERDATA_MAXAGE", 0))
 LOGLEVEL = os.environ.get('SOCCERDATA_LOGLEVEL', 'INFO').upper()
 
 # Directories
@@ -94,8 +97,10 @@ LEAGUE_DICT = {
         "MatchHistory": "E0",
         "FiveThirtyEight": "premier-league",
         "FBref": "Premier League",
+        "FotMob": "ENG-Premier League",
         "ESPN": "eng.1",
         "SoFIFA": "[England] Premier League",
+        "Understat": "EPL",
         "WhoScored": "England - Premier League",
         "season_start": "Aug",
         "season_end": "May",
@@ -105,8 +110,10 @@ LEAGUE_DICT = {
         "MatchHistory": "SP1",
         "FiveThirtyEight": "la-liga",
         "FBref": "La Liga",
+        "FotMob": "ESP-LaLiga",
         "ESPN": "esp.1",
         "SoFIFA": "[Spain] La Liga",
+        "Understat": "La liga",
         "WhoScored": "Spain - LaLiga",
         "season_start": "Aug",
         "season_end": "May",
@@ -116,8 +123,10 @@ LEAGUE_DICT = {
         "MatchHistory": "I1",
         "FiveThirtyEight": "serie-a",
         "FBref": "Serie A",
+        "FotMob": "ITA-Serie A",
         "ESPN": "ita.1",
         "SoFIFA": "[Italy] Serie A",
+        "Understat": "Serie A",
         "WhoScored": "Italy - Serie A",
         "season_start": "Aug",
         "season_end": "May",
@@ -127,8 +136,10 @@ LEAGUE_DICT = {
         "MatchHistory": "D1",
         "FiveThirtyEight": "bundesliga",
         "FBref": "Fußball-Bundesliga",
+        "FotMob": "GER-Bundesliga",
         "ESPN": "ger.1",
         "SoFIFA": "[Germany] Bundesliga",
+        "Understat": "Bundesliga",
         "WhoScored": "Germany - Bundesliga",
         "season_start": "Aug",
         "season_end": "May",
@@ -138,18 +149,22 @@ LEAGUE_DICT = {
         "MatchHistory": "F1",
         "FiveThirtyEight": "ligue-1",
         "FBref": "Ligue 1",
+        "FotMob": "FRA-Ligue 1",
         "ESPN": "fra.1",
         "SoFIFA": "[France] Ligue 1",
+        "Understat": "Ligue 1",
         "WhoScored": "France - Ligue 1",
         "season_start": "Aug",
         "season_end": "May",
     },
     "INT-World Cup": {
         "FBref": "FIFA World Cup",
+        "FotMob": "INT-World Cup",
         "WhoScored": "International - FIFA World Cup",
     },
     "INT-Women's World Cup": {
         "FBref": "FIFA Women's World Cup",
+        "FotMob": "INT-Women's World Cup",
         "WhoScored": "International - FIFA Women's World Cup",
     },
 }

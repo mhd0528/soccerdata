@@ -92,6 +92,19 @@ SoFIFA
 
 -----
 
+Understat
+    `URL <https://understat.com>`__ |
+    :doc:`Example usage <Understat>` |
+    :doc:`API reference </reference/understat>`
+
+    .. code::
+
+      from soccerdata import Understat
+
+    Advanced statistics such as xG, xGBuildup and xGChain, and shot events with associated xG values for the top European leagues.
+
+-----
+
 WhoScored
     `URL <https://www.whoscored.com/>`__ |
     :doc:`Example usage <WhoScored>` |
@@ -110,6 +123,8 @@ WhoScored
    ESPN
    FBref
    FiveThirtyEight
+   FotMob
    MatchHistory
    SoFIFA
+   Understat
    WhoScored

@@ -15,8 +15,10 @@ data scrapers.
    espn
    fbref
    fivethirtyeight
+   fotmob
    matchhistory
    sofifa
+   understat
    whoscored
 
 If you would like to extend the functionality of soccerdata, you might also be
