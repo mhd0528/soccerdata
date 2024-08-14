@@ -1,7 +1,7 @@
 """Unittests for soccerdata._common."""
 
-import datetime
 import json
+from datetime import datetime, timezone
 
 import pandas as pd
 import pytest
@@ -10,8 +10,8 @@ import time_machine
 import soccerdata
 from soccerdata._common import (
     BaseRequestsReader,
+    SeasonCode,
     make_game_id,
-    season_code,
     standardize_colnames,
 )
 
@@ -99,7 +99,7 @@ def test_download_and_save_variable_no_store_no_filepath():
 def test_make_game_id():
     s = pd.Series(
         {
-            "date": datetime.datetime(1993, 7, 30),
+            "date": datetime(1993, 7, 30, tzinfo=timezone.utc),
             "home_team": "Barcelona",
             "away_team": "Real Madrid",
         }
@@ -140,13 +140,13 @@ def test_standardize_colnames():
 
 def test_is_complete():
     reader = BaseRequestsReader(no_store=True)
-    with time_machine.travel(datetime.datetime(2020, 12, 25, 1, 24)):
+    with time_machine.travel(datetime(2020, 12, 25, 1, 24, tzinfo=timezone.utc)):
         assert reader._is_complete("ENG-Premier League", "1920")
         assert not reader._is_complete("ENG-Premier League", "2021")
-    with time_machine.travel(datetime.datetime(2021, 2, 25, 1, 24)):
+    with time_machine.travel(datetime(2021, 2, 25, 1, 24, tzinfo=timezone.utc)):
         assert reader._is_complete("ENG-Premier League", "1920")
         assert not reader._is_complete("ENG-Premier League", "2021")
-    with time_machine.travel(datetime.datetime(2021, 7, 1, 1, 24)):
+    with time_machine.travel(datetime(2021, 7, 1, 1, 24, tzinfo=timezone.utc)):
         assert reader._is_complete("ENG-Premier League", "1920")
         assert reader._is_complete("ENG-Premier League", "2021")
         assert not reader._is_complete("ENG-Premier League", "2122")
@@ -155,24 +155,28 @@ def test_is_complete():
 def test_is_complete_default_value(mocker):
     mocker.patch.object(soccerdata._common, "LEAGUE_DICT", {"FAKE-Dummy League": {}})
     reader = BaseRequestsReader(no_store=True)
-    with time_machine.travel(datetime.datetime(2020, 12, 25, 1, 24)):
+    with time_machine.travel(datetime(2020, 12, 25, 1, 24, tzinfo=timezone.utc)):
         assert reader._is_complete("FAKE-Dummy League", "1920")
 
 
-def test_is_complete_undefined_league(mocker):
+def test_is_complete_undefined_league(mocker):  # noqa: ARG001
     reader = BaseRequestsReader(no_store=True)
-    with pytest.raises(ValueError):
+    with pytest.raises(
+        ValueError,
+        match="Invalid league 'FAKE-Dummy League'",
+    ):
         reader._is_complete("FAKE-Dummy League", "1920")
 
 
 # Season codes
 def test_season_pattern1a():
-    assert season_code("9495") == "9495"
+    assert SeasonCode.MULTI_YEAR.parse("9495") == "9495"
+    assert SeasonCode.SINGLE_YEAR.parse("9495") == "1994"
 
 
 def test_season_pattern1a_warn():
     with pytest.warns(UserWarning) as record:
-        assert season_code("2021") == "2021"
+        assert SeasonCode.MULTI_YEAR.parse("2021") == "2021"
 
     # check that only one warning was raised
     assert len(record) == 1
@@ -183,28 +187,37 @@ def test_season_pattern1a_warn():
 
 def test_season_pattern1b():
     my_season = check_post = "1998"
-    assert season_code(my_season) == "9899"
+    assert SeasonCode.MULTI_YEAR.parse(my_season) == "9899"
+    assert SeasonCode.SINGLE_YEAR.parse(my_season) == "1998"
     assert my_season == check_post
 
 
 def test_season_pattern1c():
-    assert season_code("1999") == "9900"
+    assert SeasonCode.MULTI_YEAR.parse("1999") == "9900"
+    assert SeasonCode.SINGLE_YEAR.parse("1999") == "1999"
 
 
 def test_season_pattern2():
-    assert season_code("11") == "1112"
-    assert season_code("99") == "9900"
+    assert SeasonCode.MULTI_YEAR.parse("11") == "1112"
+    assert SeasonCode.SINGLE_YEAR.parse("11") == "2011"
+    assert SeasonCode.MULTI_YEAR.parse("99") == "9900"
+    assert SeasonCode.SINGLE_YEAR.parse("99") == "1999"
 
 
 def test_season_pattern3():
-    assert season_code("2011-2012") == "1112"
-    assert season_code("1999-2000") == "9900"
+    assert SeasonCode.MULTI_YEAR.parse("2011-2012") == "1112"
+    assert SeasonCode.SINGLE_YEAR.parse("2011-2012") == "2011"
+    assert SeasonCode.MULTI_YEAR.parse("1999-2000") == "9900"
+    assert SeasonCode.SINGLE_YEAR.parse("1999-2000") == "1999"
 
 
 def test_season_pattern4():
-    assert season_code("2011-12") == "1112"
-    assert season_code("1999-00") == "9900"
+    assert SeasonCode.MULTI_YEAR.parse("2011-12") == "1112"
+    assert SeasonCode.SINGLE_YEAR.parse("2011-12") == "2011"
+    assert SeasonCode.MULTI_YEAR.parse("1999-00") == "9900"
+    assert SeasonCode.SINGLE_YEAR.parse("1999-00") == "1999"
 
 
 def test_season_pattern5():
-    assert season_code("13-14") == "1314"
+    assert SeasonCode.MULTI_YEAR.parse("13-14") == "1314"
+    assert SeasonCode.SINGLE_YEAR.parse("13-14") == "2013"

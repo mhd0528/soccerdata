@@ -49,7 +49,20 @@ FBref
 
       from soccerdata import FBref
 
-    Historical results, lineups, and detailed aggregated statistics for teams and individual players based on Stats Perform data.
+    Historical results, lineups, and detailed aggregated statistics for teams and individual players based on Opta data.
+
+-----
+
+FotMob
+    `URL <https://www.fotmob.com/>`__ |
+    :doc:`Example usage <FotMob>` |
+    :doc:`API reference </reference/fotmob>`
+
+    .. code::
+
+      from soccerdata import FotMob
+
+    Historical results, lineups, and detailed aggregated statistics for teams and individual players based on Opta data.
 
 -----
 
@@ -79,6 +92,19 @@ Football-Data.co.uk
 
 -----
 
+Sofascore
+    `URL <https://sofascore.com/>`__ |
+    :doc:`Example usage <Sofascore>` |
+    :doc:`API reference </reference/sofascore>`
+
+    .. code::
+
+      from soccerdata import Sofascore
+
+    Results, schedules, lineups, and detailed statistics for teams and individual players.
+
+-----
+
 SoFIFA
     `URL <https://sofifa.com/>`__ |
     :doc:`Example usage <SoFIFA>` |
@@ -88,7 +114,7 @@ SoFIFA
 
       from soccerdata import SoFIFA
 
-    Detailed scores on all player's abilities from EA Sports FIFA.
+    Detailed scores on all player's abilities from EA Sports FC.
 
 -----
 

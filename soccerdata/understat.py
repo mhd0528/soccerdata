@@ -2,13 +2,14 @@
 
 import itertools
 import json
+from collections.abc import Iterable
 from html import unescape
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List, Optional, Union
+from typing import Any, Callable, Optional, Union
 
 import pandas as pd
 
-from ._common import BaseRequestsReader, make_game_id, season_code
+from ._common import BaseRequestsReader, make_game_id
 from ._config import DATA_DIR, NOCACHE, NOSTORE, TEAMNAME_REPLACEMENTS
 
 UNDERSTAT_DATADIR = DATA_DIR / "Understat"
@@ -72,10 +73,10 @@ class Understat(BaseRequestsReader):
 
     def __init__(
         self,
-        leagues: Optional[Union[str, List[str]]] = None,
+        leagues: Optional[Union[str, list[str]]] = None,
         seasons: Optional[Union[str, int, Iterable[Union[str, int]]]] = None,
         proxy: Optional[
-            Union[str, Dict[str, str], List[Dict[str, str]], Callable[[], Dict[str, str]]]
+            Union[str, dict[str, str], list[dict[str, str]], Callable[[], dict[str, str]]]
         ] = None,
         no_cache: bool = NOCACHE,
         no_store: bool = NOSTORE,
@@ -83,7 +84,11 @@ class Understat(BaseRequestsReader):
     ):
         """Initialize a new Understat reader."""
         super().__init__(
-            leagues=leagues, proxy=proxy, no_cache=no_cache, no_store=no_store, data_dir=data_dir
+            leagues=leagues,
+            proxy=proxy,
+            no_cache=no_cache,
+            no_store=no_store,
+            data_dir=data_dir,
         )
         self.seasons = seasons  # type: ignore
 
@@ -123,9 +128,7 @@ class Understat(BaseRequestsReader):
         )
 
         valid_leagues = [league for league in self.leagues if league in df.index]
-        df = df.loc[valid_leagues]
-
-        return df
+        return df.loc[valid_leagues]
 
     def read_seasons(self) -> pd.DataFrame:
         """Retrieve the selected seasons from the datasource.
@@ -153,7 +156,7 @@ class Understat(BaseRequestsReader):
                     "league_id": league_id,
                     "league": league,
                     "season_id": season_id,
-                    "season": season_code(season),
+                    "season": self._season_code.parse(season),
                     "url": UNDERSTAT_URL + f"/league/{league_slug}/{season_id}",
                 }
 
@@ -171,9 +174,7 @@ class Understat(BaseRequestsReader):
 
         all_seasons = itertools.product(self.leagues, self.seasons)
         valid_seasons = [season for season in all_seasons if season in df.index]
-        df = df.loc[valid_seasons]
-
-        return df
+        return df.loc[valid_seasons]
 
     def read_schedule(
         self, include_matches_without_data: bool = True, force_cache: bool = False
@@ -321,10 +322,7 @@ class Understat(BaseRequestsReader):
                     match_date = match["date"]
                     match_id = matches[(match_date, team_id)]
                     team_side = match["h_a"]
-                    if team_side == "h":
-                        prefix = "home"
-                    else:
-                        prefix = "away"
+                    prefix = "home" if team_side == "h" else "away"
 
                     if match_id not in stats:
                         stats[match_id] = schedule[match_id]
@@ -349,7 +347,7 @@ class Understat(BaseRequestsReader):
         if len(stats) == 0:
             return pd.DataFrame(index=index)
 
-        df = (
+        return (
             pd.DataFrame.from_records(list(stats.values()))
             .assign(date=lambda g: pd.to_datetime(g["date"], format="%Y-%m-%d %H:%M:%S"))
             .replace(
@@ -363,8 +361,6 @@ class Understat(BaseRequestsReader):
             .sort_index()
             .convert_dtypes()
         )
-
-        return df
 
     def read_player_season_stats(self, force_cache: bool = False) -> pd.DataFrame:
         """Retrieve the player season stats for the selected leagues and seasons.
@@ -438,7 +434,7 @@ class Understat(BaseRequestsReader):
         if len(stats) == 0:
             return pd.DataFrame(index=index)
 
-        df = (
+        return (
             pd.DataFrame.from_records(stats)
             .replace(
                 {
@@ -450,10 +446,8 @@ class Understat(BaseRequestsReader):
             .convert_dtypes()
         )
 
-        return df
-
     def read_player_match_stats(
-        self, match_id: Optional[Union[int, List[int]]] = None
+        self, match_id: Optional[Union[int, list[int]]] = None
     ) -> pd.DataFrame:
         """Retrieve the player match stats for the selected leagues and seasons.
 
@@ -524,7 +518,7 @@ class Understat(BaseRequestsReader):
         if len(stats) == 0:
             return pd.DataFrame(index=index)
 
-        df = (
+        return (
             pd.DataFrame.from_records(stats)
             .replace(
                 {
@@ -536,9 +530,7 @@ class Understat(BaseRequestsReader):
             .convert_dtypes()
         )
 
-        return df
-
-    def read_shot_events(self, match_id: Optional[Union[int, List[int]]] = None) -> pd.DataFrame:
+    def read_shot_events(self, match_id: Optional[Union[int, list[int]]] = None) -> pd.DataFrame:
         """Retrieve the shot events for the selected matches or the selected leagues and seasons.
 
         Parameters
@@ -621,7 +613,7 @@ class Understat(BaseRequestsReader):
         if len(shots) == 0:
             return pd.DataFrame(index=index)
 
-        df = (
+        return (
             pd.DataFrame.from_records(shots)
             .assign(date=lambda g: pd.to_datetime(g["date"], format="%Y-%m-%d %H:%M:%S"))
             .replace(
@@ -634,10 +626,10 @@ class Understat(BaseRequestsReader):
             .convert_dtypes()
         )
 
-        return df
-
     def _select_matches(
-        self, df_schedule: pd.DataFrame, match_id: Optional[Union[int, List[int]]] = None
+        self,
+        df_schedule: pd.DataFrame,
+        match_id: Optional[Union[int, list[int]]] = None,
     ) -> pd.DataFrame:
         if match_id is not None:
             match_ids = [match_id] if isinstance(match_id, int) else match_id
@@ -653,20 +645,19 @@ class Understat(BaseRequestsReader):
         url = UNDERSTAT_URL
         filepath = self.data_dir / "leagues.json"
         response = self.get(url, filepath, no_cache=no_cache, var="statData")
-        data = json.load(response)
-
-        return data
+        return json.load(response)
 
     def _read_league_season(
         self, url: str, league_id: int, season_id: int, no_cache: bool = False
     ) -> dict:
         filepath = self.data_dir / f"league_{league_id}_season_{season_id}.json"
         response = self.get(
-            url, filepath, no_cache=no_cache, var=["datesData", "playersData", "teamsData"]
+            url,
+            filepath,
+            no_cache=no_cache,
+            var=["datesData", "playersData", "teamsData"],
         )
-        data = json.load(response)
-
-        return data
+        return json.load(response)
 
     def _read_match(self, url: str, match_id: int) -> Optional[dict]:
         try:

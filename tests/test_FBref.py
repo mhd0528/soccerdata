@@ -7,6 +7,20 @@ import soccerdata as sd
 from soccerdata.fbref import FBref, _concat
 
 
+def test_available_leagues() -> None:
+    assert sd.FBref.available_leagues() == [
+        "Big 5 European Leagues Combined",
+        "ENG-Premier League",
+        "ESP-La Liga",
+        "FRA-Ligue 1",
+        "GER-Bundesliga",
+        "INT-European Championship",
+        "INT-Women's World Cup",
+        "INT-World Cup",
+        "ITA-Serie A",
+    ]
+
+
 @pytest.mark.parametrize(
     "stat_type",
     [
@@ -89,6 +103,20 @@ def test_read_player_match_stats(fbref_ligue1: FBref, stat_type: str) -> None:
 
 def test_read_events(fbref_ligue1: FBref) -> None:
     assert isinstance(fbref_ligue1.read_events(match_id="796787da"), pd.DataFrame)
+
+
+def test_read_events_yellow_for_manager() -> None:
+    """When a yellow card given to the manager, there is no <a> tag."""
+    fbref_laliga = sd.FBref("ESP-La Liga", "23-24")
+    events = fbref_laliga.read_events(match_id="e8867e6b")
+    yellow_cards = events[events["event_type"] == "yellow_card"]
+    assert "Pepe Bordalás" in yellow_cards["player1"].tolist()
+
+
+def test_missing_events() -> None:
+    fbref = sd.FBref("FRA-Ligue 1", "19-20")
+    events = fbref.read_events(match_id="1d845950")
+    assert len(events) == 0
 
 
 def test_read_shot_events(fbref_ligue1: FBref) -> None:

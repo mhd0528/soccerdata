@@ -73,7 +73,7 @@ leagues available for each source can be listed with the
 .. code:: python
 
    sd.FBref.available_leagues()
-   >>> ['ENG-Premier League', 'ESP-La Liga', 'FRA-Ligue 1', 'GER-Bundesliga', 'ITA-Serie A']
+   >>> ['Big 5 European Leagues Combined', 'ENG-Premier League', 'ESP-La Liga', 'FRA-Ligue 1', 'GER-Bundesliga', 'ITA-Serie A', 'INT-World Cup', "INT-Women's World Cup"]
 
 
 You can :doc:`add more leagues <howto/custom-leagues>` but there are no
@@ -174,7 +174,7 @@ Uniform team names
 Each data source uses a different set of team names, which makes it difficult
 to combine data from multiple sources. To mitigate this, SoccerData allows
 translating the team names to uniform names. This is done by providing
-a ``SOCCERDATA_DIR/config/team_dict.json`` file. This file should contain a
+a ``SOCCERDATA_DIR/config/teamname_replacements.json`` file. This file should contain a
 mapping between a generic name for each team and the team name used by each
 data source that you want to support. The example below will map "Tottenham
 Hotspur", "Tottenham Hotspur FC" and "Spurs" to "Tottenham" in all scraped

@@ -4,29 +4,17 @@ import itertools
 import json
 import re
 import time
-from datetime import datetime
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Callable, Dict, Iterable, List, Optional, Tuple, Union
+from typing import Callable, Literal, Optional, Union
 
 import numpy as np
 import pandas as pd
 from lxml import html
-from selenium.common.exceptions import (
-    ElementClickInterceptedException,
-    NoSuchElementException,
-    TimeoutException,
-)
+from selenium.common.exceptions import ElementClickInterceptedException, NoSuchElementException
 from selenium.webdriver.common.by import By
-from selenium.webdriver.remote.webelement import WebElement
-from selenium.webdriver.support import expected_conditions as ec
-from selenium.webdriver.support.ui import WebDriverWait
 
-from ._common import (
-    BaseSeleniumReader,
-    make_game_id,
-    season_code,
-    standardize_colnames,
-)
+from ._common import BaseSeleniumReader, make_game_id, standardize_colnames
 from ._config import DATA_DIR, NOCACHE, NOSTORE, TEAMNAME_REPLACEMENTS, logger
 
 WHOSCORED_DATADIR = DATA_DIR / "WhoScored"
@@ -81,50 +69,41 @@ COLS_EVENTS = {
 }
 
 
-def _parse_datetime(ts: str) -> datetime:
-    """Parse a timestamp from WhoScored.
-
-    WhoScored sometimes displays days of the week and months in Swahili. This
-    function implements a fallback for this.
+def _parse_url(url: str) -> dict:
+    """Parse a URL from WhoScored.
 
     Parameters
     ----------
-    ts : str
-        Timestamp to parse.
+    url : str
+        URL to parse.
+
+    Raises
+    ------
+    ValueError
+        If the URL could not be parsed.
 
     Returns
     -------
-    datetime.datetime
+    dict
     """
-    try:
-        return datetime.strptime(ts, "%A, %b %d %Y %H:%M")
-    except ValueError:
-        swahili_months = {
-            "Jan": "Jan",
-            "Feb": "Feb",
-            "Mac": "Mar",
-            "Apr": "Apr",
-            "Mei": "May",
-            "Jun": "Jun",
-            "Jul": "Jul",
-            "Ago": "Aug",
-            "Sep": "Sep",
-            "Okt": "Oct",
-            "Nov": "Nov",
-            "Des": "Dec",
+    patt = (
+        r"^(?:https:\/\/www.whoscored.com)?\/"
+        + r"(?:Regions\/(\d+)\/)?"
+        + r"(?:Tournaments\/(\d+)\/)?"
+        + r"(?:Seasons\/(\d+)\/)?"
+        + r"(?:Stages\/(\d+)\/)?"
+        + r"(?:Matches\/(\d+)\/)?"
+    )
+    matches = re.search(patt, url)
+    if matches:
+        return {
+            "region_id": matches.group(1),
+            "league_id": matches.group(2),
+            "season_id": matches.group(3),
+            "stage_id": matches.group(4),
+            "match_id": matches.group(5),
         }
-        swahili_days = {
-            "Jumatatu": "Monday",
-            "Jumanne": "Tuesday",
-            "Jumatano": "Wednesday",
-            "Alhamisi": "Thursday",
-            "Ijumaa": "Friday",
-            "Jumamosi": "Saturday",
-            "Jumapili": "Sunday",
-        }
-        for sw, en in {**swahili_months, **swahili_days}.items():
-            ts = ts.replace(sw, en)
-        return datetime.strptime(ts, "%A, %b %d %Y %H:%M")
+    raise ValueError(f"Could not parse URL: {url}")
 
 
 class WhoScored(BaseSeleniumReader):
@@ -172,10 +151,10 @@ class WhoScored(BaseSeleniumReader):
 
     def __init__(
         self,
-        leagues: Optional[Union[str, List[str]]] = None,
+        leagues: Optional[Union[str, list[str]]] = None,
         seasons: Optional[Union[str, int, Iterable[Union[str, int]]]] = None,
         proxy: Optional[
-            Union[str, Dict[str, str], List[Dict[str, str]], Callable[[], Dict[str, str]]]
+            Union[str, dict[str, str], list[dict[str, str]], Callable[[], dict[str, str]]]
         ] = None,
         no_cache: bool = NOCACHE,
         no_store: bool = NOSTORE,
@@ -224,11 +203,10 @@ class WhoScored(BaseSeleniumReader):
                         "region": region["name"],
                         "league_id": league["id"],
                         "league": league["name"],
-                        "url": league["url"],
                     }
                 )
 
-        df = (
+        return (
             pd.DataFrame(leagues)
             .assign(league=lambda x: x.region + " - " + x.league)
             .pipe(self._translate_league)
@@ -236,7 +214,6 @@ class WhoScored(BaseSeleniumReader):
             .loc[self._selected_leagues.keys()]
             .sort_index()
         )
-        return df
 
     def read_seasons(self) -> pd.DataFrame:
         """Retrieve the selected seasons for the selected leagues.
@@ -249,7 +226,11 @@ class WhoScored(BaseSeleniumReader):
 
         seasons = []
         for lkey, league in df_leagues.iterrows():
-            url = WHOSCORED_URL + league.url
+            url = (
+                WHOSCORED_URL
+                + f"/Regions/{league['region_id']}"
+                + f"/Tournaments/{league['league_id']}"
+            )
             filemask = "seasons/{}.html"
             filepath = self.data_dir / filemask.format(lkey)
             reader = self.get(url, filepath, var=None)
@@ -258,108 +239,27 @@ class WhoScored(BaseSeleniumReader):
             tree = html.parse(reader)
             for node in tree.xpath("//select[contains(@id,'seasons')]/option"):
                 # extract team IDs from links
+                season_url = node.get("value")
+                season_id = _parse_url(season_url)["season_id"]
                 seasons.append(
                     {
-                        "url": node.get("value"),
                         "league": lkey,
+                        "season": self._season_code.parse(node.text),
+                        "region_id": league.region_id,
                         "league_id": league.league_id,
-                        "season": season_code(node.text),
+                        "season_id": season_id,
                     }
                 )
 
-        df = (
+        return (
             pd.DataFrame(seasons)
             .set_index(["league", "season"])
             .sort_index()
             .loc[itertools.product(self.leagues, self.seasons)]
         )
-        return df
 
-    def _parse_season_stages(self) -> List[Dict]:
-        match_selector = (
-            "//div[contains(@id,'tournament-fixture')]//div[contains(@class,'divtable-row')]"
-        )
-        WebDriverWait(self._driver, 30, poll_frequency=1).until(
-            ec.presence_of_element_located((By.XPATH, match_selector))
-        )
-        node_stages_selector = "//select[contains(@id,'stages')]/option"
-        node_stages = self._driver.find_elements(By.XPATH, node_stages_selector)
-        stages = []
-        for stage in node_stages:
-            if not re.search(r"Grp. ([A-Z])$", stage.text):
-                # there is always a page with all group stage games combined
-                stages.append({"url": stage.get_attribute("value"), "name": stage.text})
-        return stages
-
-    def _parse_schedule_page(self) -> Tuple[List[Dict], Optional[WebElement]]:
-        match_selector = (
-            "//div[contains(@id,'tournament-fixture')]//div[contains(@class,'divtable-row')]"
-        )
-        date_selector = "./div[contains(@class,'divtable-header')]"
-        time_selector = "./div[contains(@class,'time')]"
-        home_team_selector = "./div[contains(@class,'team home')]//a"
-        away_team_selector = "./div[contains(@class,'team away')]//a"
-        result_selector = "./div[contains(@class,'result')]//a"
-
-        try:
-            WebDriverWait(self._driver, 30, poll_frequency=1).until(
-                ec.presence_of_element_located((By.XPATH, match_selector))
-            )
-            date_str = None
-            schedule_page = []
-            for node in self._driver.find_elements(By.XPATH, match_selector):
-                if node.get_attribute("data-id"):
-                    match_id = int(node.get_attribute("data-id"))
-                    time_str = node.find_element(By.XPATH, time_selector).get_attribute(
-                        "textContent"
-                    )
-                    match_url = node.find_element(By.XPATH, result_selector).get_attribute("href")
-                    schedule_page.append(
-                        {
-                            "date": _parse_datetime(f"{date_str} {time_str}"),
-                            "home_team": node.find_element(By.XPATH, home_team_selector).text,
-                            "away_team": node.find_element(By.XPATH, away_team_selector).text,
-                            "game_id": match_id,
-                            "url": match_url,
-                        }
-                    )
-                else:
-                    date_str = node.find_element(By.XPATH, date_selector).text
-                    logger.info("Scraping game schedule for %s", date_str)
-        except TimeoutException:
-            schedule_page = []
-
-        try:
-            next_page_selector = (
-                "//div[contains(@id,'date-controller')]"
-                "/a[contains(@class,'previous') and not(contains(@class, 'is-disabled'))]"
-            )
-            next_page = self._driver.find_element(By.XPATH, next_page_selector)
-        except NoSuchElementException:
-            next_page = None
-        return schedule_page, next_page
-
-    def _parse_schedule(self, stage: Optional[str] = None) -> List[Dict]:
-        schedule = []
-        # Parse first page
-        page_schedule, next_page = self._parse_schedule_page()
-        schedule.extend(page_schedule)
-        # Go to next page
-        while next_page is not None:
-            try:
-                next_page.click()
-                time.sleep(5)
-                logger.debug("Next page")
-            except ElementClickInterceptedException:
-                self._handle_banner()
-            # Parse next page
-            page_schedule, next_page = self._parse_schedule_page()
-            schedule.extend(page_schedule)
-        schedule = [dict(item, stage=stage) for item in schedule]
-        return schedule
-
-    def read_schedule(self, force_cache: bool = False) -> pd.DataFrame:  # noqa: C901
-        """Retrieve the game schedule for the selected leagues and seasons.
+    def read_season_stages(self, force_cache: bool = False) -> pd.DataFrame:
+        """Retrieve the season stages for the selected leagues.
 
         Parameters
         ----------
@@ -372,95 +272,179 @@ class WhoScored(BaseSeleniumReader):
         pd.DataFrame
         """
         df_seasons = self.read_seasons()
-        filemask = "matches/{}_{}.csv"
+        filemask = "seasons/{}_{}.html"
+
+        season_stages = []
+        for (lkey, skey), season in df_seasons.iterrows():
+            current_season = not self._is_complete(lkey, skey)
+
+            # get season page
+            url = (
+                WHOSCORED_URL
+                + f"/Regions/{season['region_id']}"
+                + f"/Tournaments/{season['league_id']}"
+                + f"/Seasons/{season['season_id']}"
+            )
+            filepath = self.data_dir / filemask.format(lkey, skey)
+            reader = self.get(url, filepath, var=None, no_cache=current_season and not force_cache)
+            tree = html.parse(reader)
+
+            # get default season stage
+            fixtures_url = tree.xpath("//a[text()='Fixtures']/@href")[0]
+            stage_id = _parse_url(fixtures_url)["stage_id"]
+            season_stages.append(
+                {
+                    "league": lkey,
+                    "season": skey,
+                    "region_id": season.region_id,
+                    "league_id": season.league_id,
+                    "season_id": season.season_id,
+                    "stage_id": stage_id,
+                    "stage": None,
+                }
+            )
+
+            # extract additional stages
+            for node in tree.xpath("//select[contains(@id,'stages')]/option"):
+                stage_url = node.get("value")
+                stage_id = _parse_url(stage_url)["stage_id"]
+                season_stages.append(
+                    {
+                        "league": lkey,
+                        "season": skey,
+                        "region_id": season.region_id,
+                        "league_id": season.league_id,
+                        "season_id": season.season_id,
+                        "stage_id": stage_id,
+                        "stage": node.text,
+                    }
+                )
+
+        return (
+            pd.DataFrame(season_stages)
+            .drop_duplicates(subset=["league", "season", "stage_id"], keep="last")
+            .set_index(["league", "season"])
+            .sort_index()
+            .loc[itertools.product(self.leagues, self.seasons)]
+        )
+
+    def read_schedule(self, force_cache: bool = False) -> pd.DataFrame:
+        """Retrieve the game schedule for the selected leagues and seasons.
+
+        Parameters
+        ----------
+        force_cache : bool
+             By default no cached data is used for the current season.
+             If True, will force the use of cached data anyway.
+
+        Returns
+        -------
+        pd.DataFrame
+        """
+        df_season_stages = self.read_season_stages(force_cache=force_cache)
+        filemask_schedule = "matches/{}_{}_{}_{}.json"
 
         all_schedules = []
-        for (lkey, skey), season in df_seasons.iterrows():
-            filepath = self.data_dir / filemask.format(lkey, skey)
-            url = WHOSCORED_URL + season.url
+        for (lkey, skey), stage in df_season_stages.iterrows():
+            current_season = not self._is_complete(lkey, skey)
+            stage_id = stage["stage_id"]
+            stage_name = stage["stage"]
 
-            schedule = []
-            is_current_season = not self._is_complete(lkey, skey)
-            no_cache = (not filepath.exists()) or self.no_cache
-            if (is_current_season and not force_cache) or no_cache:
-                # Scrape the season's schedule
-                self._driver.get(url)
-
-                # Check if season consists of multiple stages
-                stages = self._parse_season_stages()
-
-                # Handle a multi-stage season
-                if len(stages) > 0:
-                    for stage in stages:
-                        url = WHOSCORED_URL + stage["url"].replace("Show", "Fixtures")
-                        self._driver.get(url)
-                        try:
-                            WebDriverWait(self._driver, 30, poll_frequency=1).until(
-                                ec.presence_of_element_located(
-                                    (By.XPATH, "//div[@id='tournament-fixture']")
-                                )
-                            )
-                        except TimeoutException:
-                            # Tournaments sometimes do not have a fixtures page,
-                            # the summary page has to be used instead
-                            url = WHOSCORED_URL + stage["url"]
-                            self._driver.get(url)
-                        logger.info("Scraping game schedule with stage=%s from %s", stage, url)
-                        schedule.extend(self._parse_schedule(stage=stage["name"]))
-
-                # Handle a single-stage season
-                else:
-                    fixtures_nav_selector = "//a[text()='Fixtures']"
-                    fixtures_nav = self._driver.find_element(By.XPATH, fixtures_nav_selector)
-                    self._driver.get(fixtures_nav.get_attribute("href"))
-                    try:
-                        WebDriverWait(self._driver, 30, poll_frequency=1).until(
-                            ec.presence_of_element_located(
-                                (By.XPATH, "//div[@id='tournament-fixture']")
-                            )
-                        )
-                    except TimeoutException:
-                        # Tournaments sometimes do not have a fixtures page,
-                        # the summary page has to be used instead
-                        summary_nav_selector = "//a[text()='Fixtures']"
-                        summary_nav = self._driver.find_element(By.XPATH, summary_nav_selector)
-                        self._driver.get(summary_nav.get_attribute("href"))
-                    logger.info("Scraping game schedule from %s", url)
-                    schedule.extend(self._parse_schedule())
-
-                # Cache the data
-                df_schedule = pd.DataFrame(schedule).assign(league=lkey, season=skey)
-                if not self.no_store:
-                    df_schedule.to_csv(filepath, index=False)
-
+            # get the calendar of the season stage
+            season_stage_url = (
+                WHOSCORED_URL
+                + f"/Regions/{stage['region_id']}"
+                + f"/Tournaments/{stage['league_id']}"
+                + f"/Seasons/{stage['season_id']}"
+                + f"/Stages/{stage['stage_id']}"
+            )
+            if stage_name is not None:
+                calendar_filepath = self.data_dir / f"matches/{lkey}_{skey}_{stage_id}.html"
+                logger.info(
+                    "Retrieving calendar for %s %s (%s)",
+                    lkey,
+                    skey,
+                    stage_name,
+                )
             else:
-                # Load cached data
-                logger.info("Retrieving game schedule of %s - %s from the cache", lkey, skey)
-                df_schedule = pd.read_csv(filepath)
+                calendar_filepath = self.data_dir / f"matches/{lkey}_{skey}.html"
+                logger.info(
+                    "Retrieving calendar for %s %s",
+                    lkey,
+                    skey,
+                )
+            calendar = self.get(
+                season_stage_url,
+                calendar_filepath,
+                var="wsCalendar",
+                no_cache=current_season and not force_cache,
+            )
+            mask = json.load(calendar)["mask"]
 
-            all_schedules.append(df_schedule)
+            # get the fixtures for each month
+            it = [(year, month) for year in mask for month in mask[year]]
+            for i, (year, month) in enumerate(it):
+                filepath = self.data_dir / filemask_schedule.format(lkey, skey, stage_id, month)
+                url = WHOSCORED_URL + f"/tournaments/{stage_id}/data/?d={year}{(int(month)+1):02d}"
+
+                if stage_name is not None:
+                    logger.info(
+                        "[%s/%s] Retrieving fixtures for %s %s (%s)",
+                        i + 1,
+                        len(it),
+                        lkey,
+                        skey,
+                        stage_name,
+                    )
+                else:
+                    logger.info(
+                        "[%s/%s] Retrieving fixtures for %s %s",
+                        i + 1,
+                        len(it),
+                        lkey,
+                        skey,
+                    )
+
+                reader = self.get(
+                    url, filepath, var=None, no_cache=current_season and not force_cache
+                )
+                data = json.load(reader)
+                for tournament in data["tournaments"]:
+                    df_schedule = pd.DataFrame(tournament["matches"])
+                    df_schedule["league"] = lkey
+                    df_schedule["season"] = skey
+                    df_schedule["stage"] = stage_name
+                    all_schedules.append(df_schedule)
 
         if len(all_schedules) == 0:
             return pd.DataFrame(index=["league", "season", "game"])
 
         # Construct the output dataframe
-        df = (
+        return (
             pd.concat(all_schedules)
-            .drop_duplicates()
+            .drop_duplicates(subset=["id"])
             .replace(
                 {
-                    "home_team": TEAMNAME_REPLACEMENTS,
-                    "away_team": TEAMNAME_REPLACEMENTS,
+                    "homeTeamName": TEAMNAME_REPLACEMENTS,
+                    "awayTeamName": TEAMNAME_REPLACEMENTS,
+                }
+            )
+            .rename(
+                columns={
+                    "homeTeamName": "home_team",
+                    "awayTeamName": "away_team",
+                    "id": "game_id",
+                    "startTimeUtc": "date",
                 }
             )
             .assign(date=lambda x: pd.to_datetime(x["date"]))
             .assign(game=lambda df: df.apply(make_game_id, axis=1))
+            .pipe(standardize_colnames)
             .set_index(["league", "season", "game"])
             .sort_index()
         )
-        return df
 
-    def _read_game_info(self, game_id: int) -> Dict:
+    def _read_game_info(self, game_id: int) -> dict:
         """Return game info available in the header."""
         urlmask = WHOSCORED_URL + "/Matches/{}"
         url = urlmask.format(game_id)
@@ -468,12 +452,13 @@ class WhoScored(BaseSeleniumReader):
         self._driver.get(url)
         # league and season
         breadcrumb = self._driver.find_elements(
-            By.XPATH, "//div[@id='breadcrumb-nav']/*[not(contains(@class, 'separator'))]"
+            By.XPATH,
+            "//div[@id='breadcrumb-nav']/*[not(contains(@class, 'separator'))]",
         )
         country = breadcrumb[0].text
         league, season = breadcrumb[1].text.split(" - ")
         data["league"] = {v: k for k, v in self._all_leagues().items()}[f"{country} - {league}"]
-        data["season"] = season_code(season)
+        data["season"] = self._season_code.parse(season)
         # match header
         match_header = self._driver.find_element(By.XPATH, "//div[@id='match-header']")
         score_info = match_header.find_element(By.XPATH, ".//div[@class='teams-score-info']")
@@ -496,7 +481,9 @@ class WhoScored(BaseSeleniumReader):
         return data
 
     def read_missing_players(
-        self, match_id: Optional[Union[int, List[int]]] = None, force_cache: bool = False
+        self,
+        match_id: Optional[Union[int, list[int]]] = None,
+        force_cache: bool = False,
     ) -> pd.DataFrame:
         """Retrieve a list of injured and suspended players ahead of each game.
 
@@ -537,7 +524,10 @@ class WhoScored(BaseSeleniumReader):
             filepath = DATA_DIR / filemask.format(game["league"], game["season"], game["game_id"])
 
             logger.info(
-                "[%s/%s] Retrieving game with id=%s", i + 1, len(iterator), game["game_id"]
+                "[%s/%s] Retrieving game with id=%s",
+                i + 1,
+                len(iterator),
+                game["game_id"],
             )
             reader = self.get(url, filepath, var=None)
 
@@ -589,20 +579,21 @@ class WhoScored(BaseSeleniumReader):
         if len(match_sheets) == 0:
             return pd.DataFrame(index=["league", "season", "game", "team", "player"])
 
-        df = (
+        return (
             pd.DataFrame(match_sheets)
             .set_index(["league", "season", "game", "team", "player"])
             .sort_index()
         )
-        return df
 
     def read_events(  # noqa: C901
         self,
-        match_id: Optional[Union[int, List[int]]] = None,
+        match_id: Optional[Union[int, list[int]]] = None,
         force_cache: bool = False,
         live: bool = False,
         output_fmt: Optional[str] = "events",
-    ) -> Optional[Union[pd.DataFrame, Dict[int, List], "OptaLoader"]]:  # type: ignore  # noqa: F821
+        retry_missing: bool = True,
+        on_error: Literal["raise", "skip"] = "raise",
+    ) -> Optional[Union[pd.DataFrame, dict[int, list], "OptaLoader"]]:  # type: ignore  # noqa: F821
         """Retrieve the the event data for each game in the selected leagues and seasons.
 
         Parameters
@@ -628,14 +619,21 @@ class WhoScored(BaseSeleniumReader):
                   See https://socceraction.readthedocs.io/en/latest/documentation/SPADL.html#atomic-spadl
                 - 'loader': Returns a socceraction.data.opta.OptaLoader
                   instance, which can be used to retrieve the actual data.
-                  See https://socceraction.readthedocs.io/en/latest/modules/generated/socceraction.data.opta.OptaLoader.html#socceraction.data.opta.OptaLoader  # noqa: E501
+                  See https://socceraction.readthedocs.io/en/latest/modules/generated/socceraction.data.opta.OptaLoader.html#socceraction.data.opta.OptaLoader
                 - None: Doesn't return any data. This is useful to just cache
                   the data without storing the events in memory.
+        retry_missing : bool
+            If no events were found for a game in a previous attempt, will
+            retry to scrape the events
+        on_error : "raise" or "skip", default: "raise"
+            Wheter to raise an exception or to skip the game if an error occurs.
 
         Raises
         ------
         ValueError
             If the given match_id could not be found in the selected seasons.
+        ConnectionError
+            If the match page could not be retrieved.
         ImportError
             If the requested output format is 'spadl', 'atomic-spadl' or
             'loader' but the socceraction package is not installed.
@@ -692,25 +690,35 @@ class WhoScored(BaseSeleniumReader):
             url = urlmask.format(game["game_id"])
             # get league and season
             logger.info(
-                "[%s/%s] Retrieving game with id=%s", i + 1, len(iterator), game["game_id"]
+                "[%s/%s] Retrieving game with id=%s",
+                i + 1,
+                len(iterator),
+                game["game_id"],
             )
             filepath = self.data_dir / filemask.format(
                 game["league"], game["season"], game["game_id"]
             )
 
-            reader = self.get(
-                url,
-                filepath,
-                var="requirejs.s.contexts._.config.config.params.args.matchCentreData",
-                no_cache=live,
-            )
-            if reader.read(4) == b'null':
+            try:
                 reader = self.get(
                     url,
                     filepath,
-                    var="requirejs.s.contexts._.config.config.params.args.matchCentreData",
-                    no_cache=True,
+                    var="require.config.params['args'].matchCentreData",
+                    no_cache=live,
                 )
+                reader_value = reader.read()
+                if retry_missing and reader_value == b"null" or reader_value == b"":
+                    reader = self.get(
+                        url,
+                        filepath,
+                        var="require.config.params['args'].matchCentreData",
+                        no_cache=True,
+                    )
+            except ConnectionError as e:
+                if on_error == "skip":
+                    logger.warning("Error while scraping game %s: %s", game["game_id"], e)
+                    continue
+                raise
             reader.seek(0)
             json_data = json.load(reader)
             if json_data is not None:
@@ -772,6 +780,9 @@ class WhoScored(BaseSeleniumReader):
                 },
             )
 
+        if len(events) == 0:
+            return pd.DataFrame(index=["league", "season", "game"])
+
         df = (
             pd.concat(events.values())
             .pipe(standardize_colnames)
@@ -782,7 +793,7 @@ class WhoScored(BaseSeleniumReader):
         )
 
         if output_fmt == "events":
-            df = df.set_index(["league", "season", "game", "id"]).sort_index()
+            df = df.set_index(["league", "season", "game"]).sort_index()
             # add missing columns
             for col, default in COLS_EVENTS.items():
                 if col not in df.columns:
@@ -808,6 +819,6 @@ class WhoScored(BaseSeleniumReader):
             self._driver.find_element(By.XPATH, "//button[./span[text()='AGREE']]").click()
             time.sleep(2)
         except NoSuchElementException:
-            with open("/tmp/error.html", "w") as f:
-                f.write(self._driver.page_source)
+            # with open("/tmp/error.html", "w") as f:
+            # f.write(self._driver.page_source)
             raise ElementClickInterceptedException()

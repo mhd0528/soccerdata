@@ -10,12 +10,12 @@ from pathlib import Path
 from rich.logging import RichHandler
 
 # Configuration
-NOCACHE = os.environ.get("SOCCERDATA_NOCACHE", 'False').lower() in ('true', '1', 't')
-NOSTORE = os.environ.get("SOCCERDATA_NOSTORE", 'False').lower() in ('true', '1', 't')
+NOCACHE = os.environ.get("SOCCERDATA_NOCACHE", "False").lower() in ("true", "1", "t")
+NOSTORE = os.environ.get("SOCCERDATA_NOSTORE", "False").lower() in ("true", "1", "t")
 MAXAGE = None
 if os.environ.get("SOCCERDATA_MAXAGE") is not None:
     MAXAGE = int(os.environ.get("SOCCERDATA_MAXAGE", 0))
-LOGLEVEL = os.environ.get('SOCCERDATA_LOGLEVEL', 'INFO').upper()
+LOGLEVEL = os.environ.get("SOCCERDATA_LOGLEVEL", "INFO").upper()
 
 # Directories
 BASE_DIR = Path(os.environ.get("SOCCERDATA_DIR", Path.home() / "soccerdata"))
@@ -78,11 +78,14 @@ logger.handlers[0] = RichHandler(markup=True)
 TEAMNAME_REPLACEMENTS = {}
 _f_custom_teamnname_replacements = CONFIG_DIR / "teamname_replacements.json"
 if _f_custom_teamnname_replacements.is_file():
-    with open(_f_custom_teamnname_replacements, encoding='utf8') as json_file:
+    with _f_custom_teamnname_replacements.open(encoding="utf8") as json_file:
         for team, to_replace_list in json.load(json_file).items():
             for to_replace in to_replace_list:
                 TEAMNAME_REPLACEMENTS[to_replace] = team
-    logger.info("Custom team name replacements loaded from %s.", _f_custom_teamnname_replacements)
+    logger.info(
+        "Custom team name replacements loaded from %s.",
+        _f_custom_teamnname_replacements,
+    )
 else:
     logger.info(
         "No custom team name replacements found. You can configure these in %s.",
@@ -99,6 +102,7 @@ LEAGUE_DICT = {
         "FBref": "Premier League",
         "FotMob": "ENG-Premier League",
         "ESPN": "eng.1",
+        "Sofascore": "Premier League",
         "SoFIFA": "[England] Premier League",
         "Understat": "EPL",
         "WhoScored": "England - Premier League",
@@ -112,6 +116,7 @@ LEAGUE_DICT = {
         "FBref": "La Liga",
         "FotMob": "ESP-LaLiga",
         "ESPN": "esp.1",
+        "Sofascore": "LaLiga",
         "SoFIFA": "[Spain] La Liga",
         "Understat": "La liga",
         "WhoScored": "Spain - LaLiga",
@@ -125,6 +130,7 @@ LEAGUE_DICT = {
         "FBref": "Serie A",
         "FotMob": "ITA-Serie A",
         "ESPN": "ita.1",
+        "Sofascore": "Serie A",
         "SoFIFA": "[Italy] Serie A",
         "Understat": "Serie A",
         "WhoScored": "Italy - Serie A",
@@ -138,6 +144,7 @@ LEAGUE_DICT = {
         "FBref": "Fußball-Bundesliga",
         "FotMob": "GER-Bundesliga",
         "ESPN": "ger.1",
+        "Sofascore": "Bundesliga",
         "SoFIFA": "[Germany] Bundesliga",
         "Understat": "Bundesliga",
         "WhoScored": "Germany - Bundesliga",
@@ -151,6 +158,7 @@ LEAGUE_DICT = {
         "FBref": "Ligue 1",
         "FotMob": "FRA-Ligue 1",
         "ESPN": "fra.1",
+        "Sofascore": "Ligue 1",
         "SoFIFA": "[France] Ligue 1",
         "Understat": "Ligue 1",
         "WhoScored": "France - Ligue 1",
@@ -161,16 +169,27 @@ LEAGUE_DICT = {
         "FBref": "FIFA World Cup",
         "FotMob": "INT-World Cup",
         "WhoScored": "International - FIFA World Cup",
+        "season_code": "single-year",
+    },
+    "INT-European Championship": {
+        "FBref": "UEFA European Football Championship",
+        "FotMob": "INT-EURO",
+        "Sofascore": "EURO",
+        "WhoScored": "International - European Championship",
+        "season_start": "Jun",
+        "season_end": "Jul",
+        "season_code": "single-year",
     },
     "INT-Women's World Cup": {
         "FBref": "FIFA Women's World Cup",
         "FotMob": "INT-Women's World Cup",
         "WhoScored": "International - FIFA Women's World Cup",
+        "season_code": "single-year",
     },
 }
 _f_custom_league_dict = CONFIG_DIR / "league_dict.json"
 if _f_custom_league_dict.is_file():
-    with open(_f_custom_league_dict, encoding='utf8') as json_file:
+    with _f_custom_league_dict.open(encoding="utf8") as json_file:
         LEAGUE_DICT = {**LEAGUE_DICT, **json.load(json_file)}
     logger.info("Custom league dict loaded from %s.", _f_custom_league_dict)
 else:
