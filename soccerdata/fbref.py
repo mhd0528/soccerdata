@@ -73,6 +73,8 @@ class FBref(BaseRequestsReader):
         no_cache: bool = NOCACHE,
         no_store: bool = NOSTORE,
         data_dir: Path = FBREF_DATADIR,
+        rate_limit: int = 3,
+        max_delay: int = 0,
     ):
         """Initialize FBref reader."""
         super().__init__(
@@ -82,7 +84,8 @@ class FBref(BaseRequestsReader):
             no_store=no_store,
             data_dir=data_dir,
         )
-        self.rate_limit = 3
+        self.rate_limit = rate_limit
+        self.max_delay = max_delay
         self.seasons = seasons  # type: ignore
         # check if all top 5 leagues are selected
         if (
