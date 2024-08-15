@@ -522,7 +522,7 @@ class BaseRequestsReader(BaseReader):
             try:
                 response = self._session.get(url, stream=True)
                 time.sleep(self.rate_limit + random.random() * self.max_delay)
-                print(f"sleep time check: {self.rate_limit, self.max_delay}")
+                print(f"sleep time check: {self.rate_limit, self.max_delay, url}")
                 response.raise_for_status()
                 if var is not None:
                     if isinstance(var, str):
@@ -547,8 +547,12 @@ class BaseRequestsReader(BaseReader):
                     "Error while scraping %s. Retrying... (attempt %d of 5).",
                     url,
                     i + 1,
+                    f"current rate limit and max_delay: {self.rate_limit, self.max_delay}"
                 )
                 self._session = self._init_session()
+                # dynamically adjust rate and max_delay
+                self.rate_limit *= 2
+                self.max_delay *= 2
                 continue
 
         raise ConnectionError(f"Could not download {url}.")
