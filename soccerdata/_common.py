@@ -546,8 +546,12 @@ class BaseRequestsReader(BaseReader):
                     "Error while scraping %s. Retrying... (attempt %d of 5).",
                     url,
                     i + 1,
+                    f"current rate limit and max_delay: {self.rate_limit, self.max_delay}"
                 )
                 self._session = self._init_session()
+                # dynamically adjust rate and max_delay
+                self.rate_limit *= 2
+                self.max_delay *= 2
                 continue
 
         raise ConnectionError(f"Could not download {url}.")
