@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "soccerdata"
-version = "1.8.1"
+version = "1.8.2"
 description = "A collection of wrappers over soccer data from various websites / APIs."
 authors = ["Pieter Robberechts <pieter.robberechts@kuleuven.be>"]
 license = "Apache-2.0"
@@ -49,7 +49,7 @@ pre-commit = "^3.0.0"
 pre-commit-hooks = "^4.3.0"
 
 [tool.poetry.group.docs.dependencies]
-Sphinx = "^8.0.0"
+Sphinx = "^7.0.0"
 furo = "^2024.0.0"
 nbsphinx = "^0.9.0"
 sphinx-autobuild = "^2024.0.0"
