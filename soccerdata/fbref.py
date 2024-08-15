@@ -412,7 +412,6 @@ class FBref(BaseRequestsReader):
 
         # get list of teams
         df_teams = self.read_team_season_stats()
-        print(df_teams)
 
         if team is not None:
             # get alternative names of the specified team(s)

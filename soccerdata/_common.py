@@ -522,7 +522,6 @@ class BaseRequestsReader(BaseReader):
             try:
                 response = self._session.get(url, stream=True)
                 time.sleep(self.rate_limit + random.random() * self.max_delay)
-                print(f"sleep time check: {self.rate_limit, self.max_delay, url}")
                 response.raise_for_status()
                 if var is not None:
                     if isinstance(var, str):
