@@ -542,6 +542,7 @@ class BaseRequestsReader(BaseReader):
                         fh.write(payload)
                 return io.BytesIO(payload)
             except Exception:
+                print(f"\ncurrent rate limit and max_delay: {self.rate_limit, self.max_delay}\n")
                 logger.exception(
                     "Error while scraping %s. Retrying... (attempt %d of 5).",
                     url,
@@ -549,9 +550,9 @@ class BaseRequestsReader(BaseReader):
                     f"current rate limit and max_delay: {self.rate_limit, self.max_delay}"
                 )
                 self._session = self._init_session()
-                # dynamically adjust rate and max_delay
-                self.rate_limit *= 2
-                self.max_delay *= 2
+                # # dynamically adjust rate and max_delay
+                # self.rate_limit *= 2
+                # self.max_delay *= 2
                 continue
 
         raise ConnectionError(f"Could not download {url}.")
