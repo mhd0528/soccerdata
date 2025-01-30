@@ -10,7 +10,11 @@ from typing import Callable, Optional, Union
 import pandas as pd
 from lxml import html
 
-from ._common import BaseRequestsReader, standardize_colnames
+from ._common import (
+    BaseRequestsReader,
+    add_standardized_team_name,
+    standardize_colnames,
+)
 from ._config import DATA_DIR, NOCACHE, NOSTORE, TEAMNAME_REPLACEMENTS, logger
 
 SO_FIFA_DATADIR = DATA_DIR / "SoFIFA"
@@ -108,7 +112,7 @@ class SoFIFA(BaseRequestsReader):
                 leagues.append(
                     {
                         "league_id": child["id"],
-                        "league": f'[{child["nationName"]}] {child["value"]}',
+                        "league": f"[{child['nationName']}] {child['value']}",
                     }
                 )
         return (
@@ -172,7 +176,7 @@ class SoFIFA(BaseRequestsReader):
         pd.DataFrame
         """
         # build url
-        urlmask = SO_FIFA_API + "/teams?lg={}&r={}"
+        urlmask = SO_FIFA_API + "/teams?lg={}&r={}&set=true"
         filemask = "teams_{}_{}.html"
 
         # get league IDs
@@ -240,14 +244,7 @@ class SoFIFA(BaseRequestsReader):
         df_teams = self.read_teams()
 
         if team is not None:
-            # get alternative names of the specified team(s)
-            teams = [team] if isinstance(team, str) else team
-            teams_to_check = []
-            for team in teams:
-                for alt_name, norm_name in TEAMNAME_REPLACEMENTS.items():
-                    if norm_name == team:
-                        teams_to_check.append(alt_name)
-            teams_to_check.append(team)
+            teams_to_check = add_standardized_team_name(team)
 
             # select requested teams
             iterator = df_teams.loc[df_teams.team.isin(teams_to_check), :]
@@ -469,15 +466,18 @@ class SoFIFA(BaseRequestsReader):
 
             # extract scores one-by-one
             tree = html.parse(reader, parser=html.HTMLParser(encoding="utf8"))
+            node_player_name = tree.xpath("//div[contains(@class, 'profile')]/h1")[0]
+            # Extract what is before <br>
+            before_br = node_player_name.xpath("string(./text()[1])").strip()
+            # Extract what is after <br>
+            after_br = node_player_name.xpath("string(./br/following-sibling::text()[1])").strip()
             scores = {
-                "player": tree.xpath("//div[contains(@class, 'profile')]/h1")[0].text.strip(),
+                "player": before_br if before_br else after_br,
                 **version.to_dict(),
             }
             for s in score_labels:
                 nodes = tree.xpath(
-                    "(//li[not(self::script)] | //div | //p)"
-                    f"[.//text()[contains(.,'{s}')]]"
-                    "/em"
+                    f"(//li[not(self::script)] | //div | //p)[.//text()[contains(.,'{s}')]]//em"
                 )
                 # for multiple matches, only accept first match
                 if len(nodes) >= 1:

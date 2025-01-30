@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "soccerdata"
-version = "1.8.2"
+version = "1.8.6"
 description = "A collection of wrappers over soccer data from various websites / APIs."
 authors = ["Pieter Robberechts <pieter.robberechts@kuleuven.be>"]
 license = "Apache-2.0"
@@ -50,8 +50,8 @@ darglint = "^1.8.1"
 ruff = "*"
 mypy = "*"
 pep8-naming = "^0.14.0"
-pre-commit = "^3.0.0"
-pre-commit-hooks = "^4.3.0"
+pre-commit = "^4.0.0"
+pre-commit-hooks = "^5.0.0"
 
 [tool.poetry.group.docs.dependencies]
 Sphinx = "^7.0.0"

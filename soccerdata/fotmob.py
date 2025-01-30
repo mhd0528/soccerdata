@@ -7,8 +7,9 @@ from pathlib import Path
 from typing import Callable, Optional, Union
 
 import pandas as pd
+import requests
 
-from ._common import BaseRequestsReader, make_game_id
+from ._common import BaseRequestsReader, add_standardized_team_name, make_game_id
 from ._config import DATA_DIR, NOCACHE, NOSTORE, TEAMNAME_REPLACEMENTS, logger
 
 FOTMOB_DATADIR = DATA_DIR / "FotMob"
@@ -77,6 +78,17 @@ class FotMob(BaseRequestsReader):
             (self.data_dir / "leagues").mkdir(parents=True, exist_ok=True)
             (self.data_dir / "seasons").mkdir(parents=True, exist_ok=True)
             (self.data_dir / "matches").mkdir(parents=True, exist_ok=True)
+
+    def _init_session(self) -> requests.Session:
+        session = super()._init_session()
+        try:
+            r = requests.get("http://46.101.91.154:6006/")
+            r.raise_for_status()
+        except requests.exceptions.ConnectionError:
+            raise ConnectionError("Unable to connect to the session cookie server.")
+        result = r.json()
+        session.headers.update(result)
+        return session
 
     @property
     def leagues(self) -> list[str]:
@@ -315,7 +327,7 @@ class FotMob(BaseRequestsReader):
         df[["home_score", "away_score"]] = df["status.scoreStr"].str.split("-", expand=True)
         return df.set_index(["league", "season", "game"]).sort_index()[cols]
 
-    def read_team_match_stats(  # noqa: C901
+    def read_team_match_stats(
         self,
         stat_type: str = "Top stats",
         opponent_stats: bool = True,
@@ -366,13 +378,8 @@ class FotMob(BaseRequestsReader):
 
         if team is not None:
             # get alternative names of the specified team(s)
-            teams = [team] if isinstance(team, str) else team
-            teams_to_check = []
-            for team in teams:
-                for alt_name, norm_name in TEAMNAME_REPLACEMENTS.items():
-                    if norm_name == team:
-                        teams_to_check.append(alt_name)
-                teams_to_check.append(team)
+            teams_to_check = add_standardized_team_name(team)
+
             # select requested teams
             iterator = df_complete.loc[
                 (
