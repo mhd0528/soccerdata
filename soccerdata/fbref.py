@@ -153,7 +153,9 @@ class FBref(BaseRequestsReader):
         for html_table in tree.xpath("//table[contains(@id, 'comps')]"):
             df_table = _parse_table(html_table)
             df_table["url"] = html_table.xpath(".//th[@data-stat='league_name']/a/@href")
-            dfs.append(df_table)
+            # only append when table is not empty
+            if not df_table.empty:
+                dfs.append(df_table)
 
         df = (
             pd.concat(dfs)

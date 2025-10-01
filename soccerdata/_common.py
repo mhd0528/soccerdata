@@ -500,7 +500,10 @@ class BaseRequestsReader(BaseReader):
         """Download file at url to filepath. Overwrites if filepath exists."""
         for i in range(5):
             try:
-                response = self._session.get(url)
+                headers = {
+                    "sec-ch-ua": '"Not A Brand";v="99", "Chromium";v="138", "Google Chrome";v="138"'
+                }
+                response = self._session.get(url, headers=headers, stream=True, timeout=30)
                 time.sleep(self.rate_limit + random.random() * self.max_delay)
                 response.raise_for_status()
                 if var is not None:
@@ -530,9 +533,9 @@ class BaseRequestsReader(BaseReader):
                     f"current rate limit and max_delay: {self.rate_limit, self.max_delay}"
                 )
                 self._session = self._init_session()
-                # # dynamically adjust rate and max_delay
-                # self.rate_limit *= 2
-                # self.max_delay *= 2
+                # dynamically adjust rate and max_delay (mhd)
+                self.rate_limit *= 2
+                self.max_delay *= 2
                 continue
 
         raise ConnectionError(f"Could not download {url}.")
