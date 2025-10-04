@@ -157,6 +157,8 @@ class FBref(BaseRequestsReader):
             if not df_table.empty:
                 dfs.append(df_table)
 
+        # drop NA or empty columns before concatenation (mhd)
+        dfs = [df for df in dfs if not df.empty]
         df = (
             pd.concat(dfs)
             .pipe(standardize_colnames)
@@ -915,6 +917,8 @@ class FBref(BaseRequestsReader):
                 df_table["team"] = teams[i]["name"]
                 if "Bench" in df_table.jersey_number.values:
                     bench_idx = df_table.index[df_table.jersey_number == "Bench"][0]
+                    # fix incompatible dtype warning (mhd, bool to float64)
+                    df_table['is_starter'] = df_table['is_starter'].astype('boolean', copy=False)
                     df_table.loc[:bench_idx, "is_starter"] = True
                     df_table.loc[bench_idx:, "is_starter"] = False
                     df_table["game"] = game["game"]

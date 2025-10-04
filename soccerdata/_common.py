@@ -503,7 +503,7 @@ class BaseRequestsReader(BaseReader):
                 headers = {
                     "sec-ch-ua": '"Not A Brand";v="99", "Chromium";v="138", "Google Chrome";v="138"'
                 }
-                response = self._session.get(url, headers=headers, stream=True, timeout=30)
+                response = self._session.get(url, headers=headers)
                 time.sleep(self.rate_limit + random.random() * self.max_delay)
                 response.raise_for_status()
                 if var is not None:
