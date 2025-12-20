@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 from pathlib import Path
 from typing import IO, Callable, Optional, Union
+from weakref import proxy
 
 import numpy as np
 import pandas as pd
@@ -485,11 +486,32 @@ class BaseRequestsReader(BaseReader):
             proxy=proxy,
             data_dir=data_dir,
         )
+        self.headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/138.0.0.0 Safari/537.36"
+            ),
+            "sec-ch-ua": '"Not A Brand";v="24", "Chromium";v="138", "Google Chrome";v="138"',
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": '"Windows"',
+            "Accept": 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate, br, zstd",
+            'Connection': 'keep-alive',
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-User": "?1",
+            "Sec-Fetch-Dest": "document",
+            'Sec-Fetch-User': '?1',
+        }
 
         self._session = self._init_session()
 
     def _init_session(self) -> tls_requests.Client:
-        return tls_requests.Client(proxy=self.proxy())
+        proxy = self.proxy() if callable(self.proxy) else self.proxy
+        session = tls_requests.Client(proxy=proxy)
+        session.get("https://fbref.com/", headers=self.headers, timeout=10)
+        return session
 
     def _download_and_save(
         self,
@@ -500,12 +522,15 @@ class BaseRequestsReader(BaseReader):
         """Download file at url to filepath. Overwrites if filepath exists."""
         for i in range(5):
             try:
-                headers = {
-                    "sec-ch-ua": '"Not A Brand";v="99", "Chromium";v="138", "Google Chrome";v="138"'
-                }
-                response = self._session.get(url, headers=headers)
-                time.sleep(self.rate_limit + random.random() * self.max_delay)
+                # # solve header issue (mhd)
+                # headers = {
+                #     "sec-ch-ua": '"Not A Brand";v="99", "Chromium";v="138", "Google Chrome";v="138"'
+                # }
+                # response = self._session.get(url, headers=headers)
+                # warm up / homepage visit
+                response = self._session.get(url, headers=self.headers, timeout=10)
                 response.raise_for_status()
+                time.sleep(self.rate_limit + random.random() * self.max_delay)
                 if var is not None:
                     if isinstance(var, str):
                         var = [var]
@@ -525,17 +550,17 @@ class BaseRequestsReader(BaseReader):
                         fh.write(payload)
                 return io.BytesIO(payload)
             except Exception:
-                print(f"\ncurrent rate limit and max_delay: {self.rate_limit, self.max_delay}\n")
+                # print(f"\ncurrent rate limit and max_delay: {self.rate_limit, self.max_delay}")
+                # Adjust rate limit and max_delay upon failure (mhd)
                 logger.exception(
-                    "Error while scraping %s. Retrying... (attempt %d of 5).",
-                    url,
-                    i + 1,
-                    f"current rate limit and max_delay: {self.rate_limit, self.max_delay}"
+                    "Error while scraping %s. Retrying... (attempt %d of 5). "
+                    "current rate limit and max_delay: %s",
+                    url, i + 1, (self.rate_limit, self.max_delay),
                 )
                 self._session = self._init_session()
                 # dynamically adjust rate and max_delay (mhd)
-                self.rate_limit *= 2
-                self.max_delay *= 2
+                # self.rate_limit += 2
+                # self.max_delay += 2
                 continue
 
         raise ConnectionError(f"Could not download {url}.")
@@ -604,7 +629,12 @@ class BaseSeleniumReader(BaseReader):
         """Download file at url to filepath. Overwrites if filepath exists."""
         for i in range(5):
             try:
-                self._driver.get(url)
+                # self._driver.get(url)
+                # solve header issue (mhd)
+                headers = {
+                    "sec-ch-ua": '"Not A Brand";v="99", "Chromium";v="138", "Google Chrome";v="138"'
+                }
+                response = self._session.get(url, headers=headers)
                 time.sleep(self.rate_limit + random.random() * self.max_delay)
                 if "Incapsula incident ID" in self._driver.page_source:
                     raise WebDriverException(

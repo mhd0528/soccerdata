@@ -821,7 +821,8 @@ class FBref(BaseRequestsReader):
             tree = html.parse(reader)
             (home_team, away_team) = self._parse_teams(tree)
             id_format = "keeper_stats_{}" if stat_type == "keepers" else "stats_{}_" + stat_type
-            html_table = tree.find("//table[@id='" + id_format.format(home_team["id"]) + "']")
+            # fix warning for XML parser on '//table' xpath (mhd)
+            html_table = tree.find(".//table[@id='" + id_format.format(home_team["id"]) + "']")
             if html_table is not None:
                 df_table = _parse_table(html_table)
                 df_table["team"] = home_team["name"]
@@ -832,7 +833,8 @@ class FBref(BaseRequestsReader):
                 stats.append(df_table)
             else:
                 logger.warning("No stats found for home team for game with id=%s", game["game_id"])
-            html_table = tree.find("//table[@id='" + id_format.format(away_team["id"]) + "']")
+                # fix warning for XML parser on '//table' xpath (mhd)
+            html_table = tree.find(".//table[@id='" + id_format.format(away_team["id"]) + "']")
             if html_table is not None:
                 df_table = _parse_table(html_table)
                 df_table["team"] = away_team["name"]
@@ -918,7 +920,7 @@ class FBref(BaseRequestsReader):
                 if "Bench" in df_table.jersey_number.values:
                     bench_idx = df_table.index[df_table.jersey_number == "Bench"][0]
                     # fix incompatible dtype warning (mhd, bool to float64)
-                    df_table['is_starter'] = df_table['is_starter'].astype('boolean', copy=False)
+                    df_table['is_starter'] = pd.Series(False, index=df_table.index, dtype='boolean')
                     df_table.loc[:bench_idx, "is_starter"] = True
                     df_table.loc[bench_idx:, "is_starter"] = False
                     df_table["game"] = game["game"]
@@ -927,8 +929,9 @@ class FBref(BaseRequestsReader):
                     df_table["game"] = game["game"]
                     df_table.drop(bench_idx, inplace=True)
                 # augment with stats
+                # fix warning for XML parser on '//table' xpath (mhd)
                 html_stats_table = tree.find(
-                    "//table[@id='" + "stats_{}_summary".format(teams[i]["id"]) + "']"
+                    ".//table[@id='" + "stats_{}_summary".format(teams[i]["id"]) + "']"
                 )
                 df_stats_table = _parse_table(html_stats_table)
                 df_stats_table = df_stats_table.droplevel(0, axis=1)[["Player", "#", "Pos", "Min"]]
@@ -1104,7 +1107,8 @@ class FBref(BaseRequestsReader):
             filepath = self.data_dir / filemask.format(game["game_id"])
             reader = self.get(url, filepath)
             tree = html.parse(reader)
-            html_table = tree.find("//table[@id='shots_all']")
+            # fix warning for XML parser on '//table' xpath (mhd)
+            html_table = tree.find(".//table[@id='shots_all']")
             if html_table is not None:
                 df_table = _parse_table(html_table)
                 df_table["league"] = game["league"]
